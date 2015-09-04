@@ -1,0 +1,12 @@
+compile.bat
+*.csproj
+*.user
+*.userprefs
+*.sln
+*.suo
+*.cache
+*.mds
+
+[Oo]bj/
+[Bb]in/
+

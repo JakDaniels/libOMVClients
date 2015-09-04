@@ -1,2 +1,4 @@
 # libomvClients
-Experimental client tool built around lib OpenMetaverse
+Experimental client toosl built around lib OpenMetaverse.
+
+
