@@ -61,6 +61,34 @@
       </Files>
     </Project>
 
+    <Project name="GridImageUploadCmd" path="Programs/GridImageUploadCmd" type="Exe" frameworkVersion="v4_0">
+      <Configuration name="Debug">
+        <Options>
+          <OutputPath>../../bin/</OutputPath>
+        </Options>
+      </Configuration>
+      <Configuration name="Release">
+        <Options>
+          <OutputPath>../../bin/</OutputPath>
+        </Options>
+      </Configuration>
+
+      <ReferencePath>../../bin/</ReferencePath>
+      <ReferencePath>../../../libopenmetaverse/bin/</ReferencePath>
+      <Reference name="System"/>
+      <Reference name="System.Data"/>
+      <Reference name="System.Drawing"/>
+      <Reference name="OpenMetaverse"/>
+      <Reference name="OpenMetaverseTypes"/>
+
+      <Files>
+        <Match pattern="*.cs" recurse="true"/>
+        <Match pattern="*.resx" recurse="true"/>
+        <Match pattern="*.settings" recurse="true"/>
+        <Match pattern="*.ico" recurse="true"/>
+      </Files>
+    </Project>
+    
   </Solution>
 </Prebuild>
 
