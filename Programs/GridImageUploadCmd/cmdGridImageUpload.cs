@@ -15,7 +15,6 @@ namespace cmdGridImageUpload
     {
         private GridClient Client;
         private byte[] UploadData = null;
-        private int Transferred = 0;
         private string FileName = String.Empty;
         private UUID SendToID;
         private UUID AssetID;
@@ -26,31 +25,88 @@ namespace cmdGridImageUpload
         private string Password = String.Empty;
         private string ccFirstName = String.Empty;
         private string ccLastName = String.Empty;
-
+        private bool noResize = false;
+        private bool ShowUsage = false;
         private bool Connected = false;
         private bool ConnectFailed = false;
         private bool EventQueueRunning = false;
+        private bool UploadComplete = false;
         private bool UploadFailed = false;
 
         public static int Main(string[] args)
         {
-            //args should be LoginURL FirstName LastName Password PathToImage [CopyToFirstName] [CopyToLastName]
-            if (args.Length < 5)
+            //args should be --login=LoginURL --first=FirstName --last=LastName ==password=Password --file=PathToImage [--cc-first=CopyToFirstName] [--cc-last=CopyToLastName] [--no-resize]
+            //int i = 0;
+            //while (i<args.Length) Console.WriteLine(args[i++]);
+            //return 0;
+
+            cmdGridImageUpload m = new cmdGridImageUpload();
+            
+            Dictionary<string, string> arg = m.ParseArgs(args);
+
+            if (arg.ContainsKey("login"))
             {
-                Console.WriteLine("Usage: GridImageUploadCmd.exe LoginURL FirstName LastName Password PathToImage [CopyToFirstName] [CopyToLastName]");
+                m.LoginURL = arg["login"];
+            }
+            else
+            {
+                m.ShowUsage = true;
+            }
+
+            if (arg.ContainsKey("first"))
+            {
+                m.FirstName = arg["first"];
+            }
+            else
+            {
+                m.ShowUsage = true;
+            }
+
+            if (arg.ContainsKey("last"))
+            {
+                m.LastName = arg["last"];
+            }
+            else
+            {
+                m.ShowUsage = true;
+            }
+
+            if (arg.ContainsKey("password"))
+            {
+                m.Password = arg["password"];
+            }
+            else
+            {
+                m.ShowUsage = true;
+            }
+
+            if (arg.ContainsKey("file"))
+            {
+                m.FileName = arg["file"];
+            }
+            else
+            {
+                m.ShowUsage = true;
+            }
+
+            if (arg.ContainsKey("cc-first"))
+            {
+                m.ccFirstName = arg["cc-first"];
+            }
+            if (arg.ContainsKey("cc-last"))
+            {
+                m.ccLastName = arg["cc-last"];
+            }
+            if (arg.ContainsKey("no-resize"))
+            {
+                m.noResize = true;
+            }
+            if (m.ShowUsage)
+            {
+                Console.WriteLine("Usage: GridImageUploadCmd.exe --login=LoginURL --first=FirstName --last=LastName --password=Password --file=PathToImage [--cc-first=CopyToFirstName] [--cc-last=CopyToLastName] [--no-resize]");
                 return 1;
             }
-            cmdGridImageUpload m = new cmdGridImageUpload();
-            m.LoginURL = args[0];
-            m.FirstName = args[1];
-            m.LastName = args[2];
-            m.Password = args[3];
-            m.FileName = args[4];
-            if (args.Length == 7)
-            {
-                m.ccFirstName = args[5];
-                m.ccLastName = args[6];
-            }
+
             m.InitClient();
             //initiate login
             LoginParams lp = m.Client.Network.DefaultLoginParams(m.FirstName, m.LastName, m.Password, "GridImageUploadCmd", "0.1");
@@ -68,18 +124,65 @@ namespace cmdGridImageUpload
             
             if (m.LoadImage())
             {
-                 m.UploadImage();
+                if (m.UploadImage())
+                {
+                    while (!m.UploadComplete) System.Threading.Thread.Sleep(500);
+
+                }
+                else
+                {
+                    Console.WriteLine("Error Uploading Image");
+                }
             }
 
             //initiate logout
             if (m.Connected)
             {
-                Console.WriteLine("Logging Out.");
+                Console.WriteLine("Logging Out");
                 m.Client.Network.Logout();
             }
             m.Client = null;
             if (m.UploadFailed) return 1; else return 0;
         }
+
+        private Dictionary<string, string> ParseArgs(string[] args)
+        {
+            Dictionary<string, string> dictionary = new Dictionary<string, string>();
+            int i = 0;
+            string a;
+            string v = "";
+            int ov = 0;
+
+            while (i < args.Length)
+            {
+                if (args[i].Substring(0, 2) == "--") a = args[i].Substring(2,args[i].Length-2);
+                else
+                {
+                    if (args[i].Substring(0, 1) == "-") a = args[i].Substring(1, args[i].Length - 1);
+                    else
+                    {
+                        a = String.Format("{0}", ov);
+                        ov++;
+                    }
+                }
+                if (a.Contains("="))
+                {
+                    string[] tmp = a.Split("=".ToCharArray());
+                    //Console.WriteLine("{0}:{1}", tmp[0], tmp[1]);
+                    dictionary.Add(tmp[0], tmp[1]);
+                }
+                else
+                {
+                    if (args[i].Substring(0, 1) == "-" || i == args.Length) v = "1";
+                    else v = args[i];
+                    //Console.WriteLine("{0}:{1}", a, v);
+                    dictionary.Add(a, v);
+                }
+                i++;
+            }
+            return dictionary;
+        }
+
         private void InitClient()
         {
             Client = new GridClient();
@@ -136,45 +239,53 @@ namespace cmdGridImageUpload
 
                     int oldwidth = bitmap.Width;
                     int oldheight = bitmap.Height;
+                    int newwidth;
+                    int newheight;
 
                     if (!IsPowerOfTwo((uint)oldwidth) || !IsPowerOfTwo((uint)oldheight))
                     {
-                        Console.WriteLine("Image has irregular dimensions {0}x{1}, resizing to 256x256", oldwidth, oldheight);
-
-                        Bitmap resized = new Bitmap(256, 256, bitmap.PixelFormat);
-                        Graphics graphics = Graphics.FromImage(resized);
-
-                        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-                        graphics.InterpolationMode =
-                           System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                        graphics.DrawImage(bitmap, 0, 0, 256, 256);
-
-                        bitmap.Dispose();
-                        bitmap = resized;
-
-                        oldwidth = 256;
-                        oldheight = 256;
-                    }
-
-                    // Handle resizing to prevent excessively large images
-                    if (oldwidth > 1024 || oldheight > 1024)
-                    {
-                        int newwidth = (oldwidth > 1024) ? 1024 : oldwidth;
-                        int newheight = (oldheight > 1024) ? 1024 : oldheight;
-
-                        Console.WriteLine("Image has oversized dimensions {0}x{1}, resizing to {2}x{3}", oldwidth, oldheight, newwidth, newheight);
+                        newwidth = Pow2Roundup(oldwidth);
+                        newheight = Pow2Roundup(oldheight);
+                        Console.WriteLine("Image has irregular dimensions {0}x{1}, resizing to {2}x{3}", oldwidth, oldheight, newwidth, newheight);
 
                         Bitmap resized = new Bitmap(newwidth, newheight, bitmap.PixelFormat);
                         Graphics graphics = Graphics.FromImage(resized);
 
                         graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
                         graphics.InterpolationMode =
-                           System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                            System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
                         graphics.DrawImage(bitmap, 0, 0, newwidth, newheight);
 
                         bitmap.Dispose();
                         bitmap = resized;
+
+                        oldwidth = newwidth;
+                        oldheight = newheight;
                     }
+
+                    if (!noResize)
+                    {
+                        // Handle resizing to prevent excessively large images
+                        if (oldwidth > 1024 || oldheight > 1024)
+                        {
+                            newwidth = (oldwidth > 1024) ? 1024 : oldwidth;
+                            newheight = (oldheight > 1024) ? 1024 : oldheight;
+
+                            Console.WriteLine("Image has oversized dimensions {0}x{1}, resizing to {2}x{3}", oldwidth, oldheight, newwidth, newheight);
+
+                            Bitmap resized = new Bitmap(newwidth, newheight, bitmap.PixelFormat);
+                            Graphics graphics = Graphics.FromImage(resized);
+
+                            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                            graphics.InterpolationMode =
+                               System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                            graphics.DrawImage(bitmap, 0, 0, newwidth, newheight);
+
+                            bitmap.Dispose();
+                            bitmap = resized;
+                        }
+                    }
+                    else Console.WriteLine("Oversize resizing is disabled...");
 
                     Console.WriteLine("Encoding image...");
 
@@ -283,30 +394,30 @@ namespace cmdGridImageUpload
                 Permissions perms = new Permissions();
                 perms.EveryoneMask = PermissionMask.All;
                 perms.NextOwnerMask = PermissionMask.All;
+                Console.WriteLine("Starting uploading of image to Asset Server with name '{0}'", name);
+                Client.Inventory.RequestCreateItemFromAsset(UploadData, name, "Uploaded with GridImageUploadCmd", AssetType.Texture,
+                    InventoryType.Texture, Client.Inventory.FindFolderForType(AssetType.Texture), perms, ItemCreatedFromAssetCallback);
 
-                Client.Inventory.RequestCreateItemFromAsset(UploadData, name, "Uploaded with GridImageUpload", AssetType.Texture,
-                    InventoryType.Texture, Client.Inventory.FindFolderForType(AssetType.Texture), perms,
-                    delegate(bool success, string status, UUID itemID, UUID assetID)
-                    {
-                        if (success)
-                        {
-                            AssetID = assetID;
-                            Transferred = UploadData.Length;
-                            Console.Write("Uploading Image with new asset UUID {1}: {2} of {3} bytes", AssetID, Transferred, UploadData.Length);
-
-                            // Fix the permissions on the new upload since they are fscked by default
-                            InventoryItem item = (InventoryItem)Client.Inventory.Store[itemID];
-                        }
-                        else
-                        {
-                            Console.WriteLine("Asset upload failed: {0}", status);
-                            UploadFailed = true;
-                        }
-                    }
-                );
                 return true;
             }
             return false;
+        }
+
+        private void ItemCreatedFromAssetCallback(bool success, string status, UUID itemID, UUID assetID)
+        {
+            //Console.WriteLine("Called ItemCreatedFromAssetCallback. success: {0}, status: {1}, itemID: {2}, assetId: {3}", success.ToString(), status, itemID.ToString(), assetID.ToString());
+            if (success)
+            {
+                AssetID = assetID;
+                Console.WriteLine("Asset created with asset UUID: {0}", AssetID.ToString());
+
+            }
+            else
+            {
+                UploadFailed = true;
+                Console.WriteLine("Failed to create Asset! The error was: {0}", status);
+            }
+            UploadComplete = true;
         }
 
         private void Network_OnEventQueueRunning(object sender, EventQueueRunningEventArgs e)
@@ -319,6 +430,25 @@ namespace cmdGridImageUpload
         private bool IsPowerOfTwo(uint n)
         {
             return (n & (n - 1)) == 0 && n != 0;
+        }
+
+        private int Pow2Roundup (int n)
+        {
+            if (n < 0)
+            return 0;
+            --n;
+            n |= n >> 1;
+            n |= n >> 2;
+            n |= n >> 4;
+            n |= n >> 8;
+            n |= n >> 16;
+            n |= n >> 32;
+            n |= n >> 64;
+            n |= n >> 128;
+            n |= n >> 256;
+            n |= n >> 512;
+            n |= n >> 1024;
+            return n + 1;
         }
      }
 }
