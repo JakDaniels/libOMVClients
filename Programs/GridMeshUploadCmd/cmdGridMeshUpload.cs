@@ -36,7 +36,13 @@ namespace cmdGridMeshUpload
         private bool UploadComplete = false;
         private bool UploadFailed = false;
 
+        private string ObjectName;
+        private string ObjectTmpName;
+        private List<string> ImageNames;
         private UUID UploadedMeshUUID;
+        private UUID UploadedMeshInvUUID;
+        private UUID MyObjectFolder;
+        private UUID MyTexturesFolder;
 
         public static int Main(string[] args)
         {
@@ -124,6 +130,21 @@ namespace cmdGridMeshUpload
 
             while (!m.EventQueueRunning) System.Threading.Thread.Sleep(500);
 
+            /*
+            UUID TexturesFolder = m.Client.Inventory.FindFolderForType(AssetType.Texture);
+            UUID MyUUID = m.Client.Self.AgentID;
+            UUID OurTexturesFolder = UUID.Zero;
+            Console.WriteLine("My UUID = {0} Texture Folder UUID = {1}", MyUUID, TexturesFolder);
+            List<InventoryBase> fl = m.Client.Inventory.FolderContents(TexturesFolder, MyUUID, true, false, InventorySortOrder.ByName, 5000);
+            if (fl != null)
+            {
+                foreach (InventoryBase f in fl)
+                {
+                    if(f.GetType().ToString() == "OpenMetaverse.InventoryFolder") Console.WriteLine("{0} {1} |{2}|", f.UUID.ToString(), f.GetType().ToString(), f.Name);
+                }
+            }
+            */
+            
             if (m.UploadMesh())
             {
                 while (!m.UploadComplete) System.Threading.Thread.Sleep(500);
@@ -134,6 +155,8 @@ namespace cmdGridMeshUpload
                 Console.WriteLine("Error Uploading Mesh");
             }
 
+            m.FixUploadFolders();
+            
             //initiate logout
             if (m.Connected)
             {
@@ -243,21 +266,24 @@ namespace cmdGridMeshUpload
 
             Console.WriteLine("Uploading...");
 
-            string ObjectName=Path.GetFileNameWithoutExtension(FileName);
+            ObjectName = Path.GetFileNameWithoutExtension(FileName);
+            ObjectTmpName = "GMUC-" + UUID.Random().ToString();
 
+            //use a folder name we can later find by searching, so we can move the textures into the same folder.
+            //OpenSim ignores the textures folder UUID we give it and places textures in its own folder under /Textures
             UUID ObjectFolder = Client.Inventory.FindFolderForType(AssetType.Object);
-            UUID MyObjectFolder = Client.Inventory.CreateFolder(ObjectFolder, ObjectName);
-            UUID MyTexturesFolder = Client.Inventory.CreateFolder(MyObjectFolder, "Textures");
+            MyObjectFolder = Client.Inventory.CreateFolder(ObjectFolder, ObjectTmpName);
+            MyTexturesFolder = Client.Inventory.CreateFolder(MyObjectFolder, "Textures");
 
-            Console.WriteLine("Created New Folder under 'Objects' called '{0}' with UUID {1}", ObjectName, MyObjectFolder);
-            Console.WriteLine("Created New Folder under '{0}' called 'Textures' with UUID {1}", ObjectName, MyTexturesFolder);
+            Console.WriteLine("Created New Folder under 'Objects' called '{0}' with UUID {1}", ObjectTmpName, MyObjectFolder);
+            Console.WriteLine("Created New Folder under '{0}' called 'Textures' with UUID {1}", ObjectTmpName, MyTexturesFolder);
             
             var uploader = new cmdModelUploader(Client, prims);
             var uploadDone = new AutoResetEvent(false);
 
             uploader.IncludePhysicsStub = true;
             uploader.UseModelAsPhysics = false;
-            uploader.InvName = ObjectName;
+            uploader.InvName = ObjectTmpName;
             uploader.InvDescription = "Uploaded by GridUploadMeshCmd on " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             uploader.InvAssetFolderUUID = MyObjectFolder;
             uploader.InvTextureFolderUUID = MyTexturesFolder;
@@ -276,7 +302,11 @@ namespace cmdGridMeshUpload
                 else
                 {
                     UploadedMeshUUID = uploader.ReturnedMeshUUID;
+                    UploadedMeshInvUUID = uploader.ReturnedMeshInvUUID;
+                    ImageNames = uploader.ImageNames;
                     Console.WriteLine("Upload success. Uploaded Mesh has Asset UUID: {0}", UploadedMeshUUID);
+                    //foreach (var uii in uploader.ImgIndex) Console.WriteLine("Key = {0}, Value={1}", uii.Key, uii.Value.ToString());
+                    //for (int i = 0; i < uploader.ImageNames.Count; i++) Console.WriteLine("Image = {0}", uploader.ImageNames[i]);
                     UploadComplete = true;
                 }
 
@@ -292,5 +322,77 @@ namespace cmdGridMeshUpload
             return true;
         }
 
+        private void FixUploadFolders()
+        {
+            UUID MyUUID = Client.Self.AgentID;
+
+            if(UploadImages) 
+            {
+                List<InventoryBase> fl;
+                UUID OurTexturesFolder = UUID.Zero;
+                UUID TexturesFolder = Client.Inventory.FindFolderForType(AssetType.Texture);
+                
+                Console.WriteLine("Scanning for uploaded texture folder '{0}' in system folder 'Textures' with UUID = {1}", ObjectTmpName, TexturesFolder);
+                fl = Client.Inventory.FolderContents(TexturesFolder, MyUUID, true, false, InventorySortOrder.ByName, 20000);
+                if (fl != null)
+                {
+                    foreach (InventoryBase f in fl)
+                    {
+                        if (f is InventoryFolder && f.Name == ObjectTmpName)
+                        {
+                            OurTexturesFolder = f.UUID;
+                            break;
+                        }
+                    }
+                    fl.Clear();
+                }
+
+                if (OurTexturesFolder != UUID.Zero)
+                {
+                    //now get a list of the texture names in the "Textures" folder
+                    Console.WriteLine("Scanning for uploaded textures in folder with UUID={0}...", OurTexturesFolder);
+                    fl = Client.Inventory.FolderContents(OurTexturesFolder, MyUUID, false, true, InventorySortOrder.ByName, 20000);
+                    if (fl != null)
+                    {
+                        foreach (InventoryBase f in fl)
+                        {
+                            if (f is InventoryTexture)
+                            {
+                                if (f.Name.Contains(ObjectTmpName + " - Texture"))
+                                {
+                                    Console.WriteLine("Found texture '{0}' with UUID={1}, ParentUUID={2}", f.Name, f.UUID, f.ParentUUID);
+                                    string[] tx = f.Name.Split(" ".ToCharArray());
+                                    int i;
+                                    if (Int32.TryParse(tx[tx.Length - 1], out i))
+                                    {
+                                        Console.WriteLine("Renaming texture from '{0}' to '{1}' and moving from folder {2} to {3}", f.Name, ImageNames[i - 1], f.ParentUUID, MyTexturesFolder);
+                                        var Texture = Client.Inventory.FetchItem(f.UUID, MyUUID, 20000);
+                                        Texture.Name = ImageNames[i - 1];
+                                        Console.WriteLine("Inventory Item Name: '{0}' AssetUUID:{1} InvUUID:{2} ParentUUID:{3}", Texture.Name, Texture.AssetUUID, Texture.UUID, Texture.ParentUUID);
+                                        Client.Inventory.RequestUpdateItem(Texture);
+                                        Client.Inventory.MoveItem(f.UUID, MyTexturesFolder);
+                                        Console.WriteLine();
+                                    }
+                                }
+                            }
+                        }
+                        fl.Clear();
+                    }
+
+                    Console.WriteLine("Removing folder {0}", OurTexturesFolder);
+                    Client.Inventory.RemoveFolder(OurTexturesFolder); //remove the created "Textures" folder that Opensim made
+                }
+            }
+            Console.WriteLine("Renaming mesh inventory object {0} from {1} to {2}", UploadedMeshInvUUID, ObjectTmpName, ObjectName);
+            //rename the mesh from ObjectTmpName to ObjectName
+            var MyObject = Client.Inventory.FetchItem(UploadedMeshInvUUID, MyUUID, 20000);
+            MyObject.Name = ObjectName;
+            Console.WriteLine("Inventory Item '{0}' {1} {2} {3}", MyObject.Name, MyObject.AssetUUID, MyObject.UUID, MyObject.ParentUUID);
+            Client.Inventory.RequestUpdateItem(MyObject);
+
+            Console.WriteLine("Renaming object folder from {0} to {1}", ObjectTmpName, ObjectName);
+            Client.Inventory.MoveFolder(MyObjectFolder, Client.Inventory.FindFolderForType(AssetType.Object), ObjectName);
+             
+        }
     }
 }

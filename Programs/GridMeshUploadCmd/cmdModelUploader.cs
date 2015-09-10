@@ -26,6 +26,7 @@ namespace OpenMetaverse.ImportExport
         public GridClient Client;
         public List<ModelPrim> Prims;
         public List<byte[]> Images;
+        public List<string> ImageNames;
         public Dictionary<string, int> ImgIndex;
         public string InvName = "NewMesh";
         public string InvDescription = "";
@@ -33,6 +34,7 @@ namespace OpenMetaverse.ImportExport
         public bool UploadTextures;
         public int Debug;
         public UUID ReturnedMeshUUID;
+        public UUID ReturnedMeshInvUUID;
 
         /// <summary>
         /// Inlcude stub convex hull physics, required for uploading to Second Life
@@ -88,6 +90,7 @@ namespace OpenMetaverse.ImportExport
                                 // Request full update on the item in order to update the local store
                                 Client.Inventory.RequestFetchInventory(reply["new_inventory_item"].AsUUID(), Client.Self.AgentID);
                                 ReturnedMeshUUID = reply["new_asset"].AsUUID();
+                                ReturnedMeshInvUUID = reply["new_inventory_item"].AsUUID();
                             }
                         }
                         if (callback != null) callback(contents);
@@ -114,6 +117,7 @@ namespace OpenMetaverse.ImportExport
             }
 
             Images = new List<byte[]>();
+            ImageNames = new List<string>();
             ImgIndex = new Dictionary<string, int>();
 
             OSDMap req = new OSDMap();
@@ -189,6 +193,7 @@ namespace OpenMetaverse.ImportExport
                             index = Images.Count;
                             ImgIndex[face.Material.Texture] = index;
                             Images.Add(face.Material.TextureData);
+                            ImageNames.Add(face.Material.Texture);
                         }
                         faceMap["image"] = index;
                         faceMap["scales"] = 1.0f;

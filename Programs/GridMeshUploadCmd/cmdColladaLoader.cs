@@ -173,7 +173,6 @@ namespace OpenMetaverse.ImportExport
                 }
 
                 material.TextureData = OpenJPEG.EncodeFromImage(bitmap, false);
-
                 Console.WriteLine("Successfully encoded image {0}", fname);
             }
             catch (Exception ex)
