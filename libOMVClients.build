@@ -58,11 +58,13 @@
         <delete dir="${obj.dir}" failonerror="false" />
         <nant buildfile="../libOMVClients/Programs/GridImageUpload/GridImageUpload.exe.build" target="clean" />
         <nant buildfile="../libOMVClients/Programs/GridImageUploadCmd/GridImageUploadCmd.exe.build" target="clean" />
+        <nant buildfile="../libOMVClients/Programs/GridMeshUploadCmd/GridMeshUploadCmd.exe.build" target="clean" />
     </target>
 
     <target name="build" depends="init" description="">
         <nant buildfile="../libOMVClients/Programs/GridImageUpload/GridImageUpload.exe.build" target="build" />
         <nant buildfile="../libOMVClients/Programs/GridImageUploadCmd/GridImageUploadCmd.exe.build" target="build" />
+        <nant buildfile="../libOMVClients/Programs/GridMeshUploadCmd/GridMeshUploadCmd.exe.build" target="build" />
     </target>
 
     <target name="build-release" depends="Release, init, build" description="Builds in Release mode" />
@@ -75,6 +77,7 @@
         <echo message="Generating all documentation from all builds" />
         <nant buildfile="../libOMVClients/Programs/GridImageUpload/GridImageUpload.exe.build" target="doc" />
         <nant buildfile="../libOMVClients/Programs/GridImageUploadCmd/GridImageUploadCmd.exe.build" target="doc" />
+        <nant buildfile="../libOMVClients/Programs/GridMeshUploadCmd/GridMeshUploadCmd.exe.build" target="doc" />
     </target>
 
 </project>

@@ -89,6 +89,36 @@
       </Files>
     </Project>
     
+    <Project name="GridMeshUploadCmd" path="Programs/GridMeshUploadCmd" type="Exe" frameworkVersion="v4_0">
+      <Configuration name="Debug">
+        <Options>
+          <OutputPath>../../bin/</OutputPath>
+        </Options>
+      </Configuration>
+      <Configuration name="Release">
+        <Options>
+          <OutputPath>../../bin/</OutputPath>
+        </Options>
+      </Configuration>
+
+      <ReferencePath>../../bin/</ReferencePath>
+      <ReferencePath>../../../libopenmetaverse/bin/</ReferencePath>
+      <Reference name="System"/>
+      <Reference name="System.Data"/>
+      <Reference name="System.Drawing"/>
+      <Reference name="System.XML"/>
+      <Reference name="OpenMetaverse"/>
+      <Reference name="OpenMetaverseTypes"/>
+      <Reference name="OpenMetaverse.StructuredData"/>
+
+      <Files>
+        <Match pattern="*.cs" recurse="true"/>
+        <Match pattern="*.resx" recurse="true"/>
+        <Match pattern="*.settings" recurse="true"/>
+        <Match pattern="*.ico" recurse="true"/>
+      </Files>
+    </Project>
+    
   </Solution>
 </Prebuild>
 
