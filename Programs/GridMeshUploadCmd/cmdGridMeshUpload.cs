@@ -25,10 +25,14 @@ namespace cmdGridMeshUpload
         private string FirstName = String.Empty;
         private string LastName = String.Empty;
         private string Password = String.Empty;
-        private bool UploadImages = true;
-        private bool NoResize = false;
-        private bool ShowUsage = false;
+        private string ccFirstName = String.Empty;
+        private string ccLastName = String.Empty;
+        private bool UploadTextures = true;
+        private bool AllowOversize = false;
+        private float TextureScale = 1.0f;
         private int Debug = 0;
+
+        private bool ShowUsage = false;
 
         private bool Connected = false;
         private bool ConnectFailed = false;
@@ -43,75 +47,66 @@ namespace cmdGridMeshUpload
         private UUID UploadedMeshInvUUID;
         private UUID MyObjectFolder;
         private UUID MyTexturesFolder;
+        private UUID ccUUID = UUID.Zero;
 
         public static int Main(string[] args)
         {
-            //args should be --login=LoginURL --first=FirstName --last=LastName ==password=Password --file=PathToMesh [--cc-first=CopyToFirstName] [--cc-last=CopyToLastName] [--upload-images] [--no-resize]
+            //args should be --login=LoginURL --first=FirstName --last=LastName ==password=Password --file=PathToMesh 
+            //               [--cc-first=CopyToFirstName] [--cc-last=CopyToLastName] [--upload-textures] [--allow-oversize] [--texture-scale=ScaleFactor]
 
             cmdGridMeshUpload m = new cmdGridMeshUpload();
 
             Dictionary<string, string> arg = m.ParseArgs(args);
 
-            if (arg.ContainsKey("login"))
-            {
-                m.LoginURL = arg["login"];
-            }
-            else
-            {
-                m.ShowUsage = true;
-            }
+            if (arg.ContainsKey("login")) m.LoginURL = arg["login"]; else m.ShowUsage = true;
 
-            if (arg.ContainsKey("first"))
-            {
-                m.FirstName = arg["first"];
-            }
-            else
-            {
-                m.ShowUsage = true;
-            }
+            if (arg.ContainsKey("first")) m.FirstName = arg["first"]; else m.ShowUsage = true;
 
-            if (arg.ContainsKey("last"))
-            {
-                m.LastName = arg["last"];
-            }
-            else
-            {
-                m.ShowUsage = true;
-            }
+            if (arg.ContainsKey("last")) m.LastName = arg["last"]; else m.ShowUsage = true;
 
-            if (arg.ContainsKey("password"))
-            {
-                m.Password = arg["password"];
-            }
-            else
-            {
-                m.ShowUsage = true;
-            }
+            if (arg.ContainsKey("password")) m.Password = arg["password"]; else m.ShowUsage = true;
 
-            if (arg.ContainsKey("file"))
-            {
-                m.FileName = arg["file"];
-            }
-            else
-            {
-                m.ShowUsage = true;
-            }
-
-            if (arg.ContainsKey("upload-images"))
-            {
-                m.UploadImages = true;
-            }
-            if (arg.ContainsKey("no-resize"))
-            {
-                m.NoResize = true;
-            }
+            if (arg.ContainsKey("file")) m.FileName = arg["file"]; else m.ShowUsage = true;
+            
+            if (arg.ContainsKey("cc-first")) m.ccFirstName = arg["cc-first"];
+            
+            if (arg.ContainsKey("cc-last")) m.ccLastName = arg["cc-last"];
+            
+            if (arg.ContainsKey("upload-textures")) m.UploadTextures = true;
+            
+            if (arg.ContainsKey("allow-oversize")) m.AllowOversize = true;
+            
+            if (arg.ContainsKey("texture-scale"))  float.TryParse(arg["texture-scale"], out m.TextureScale);
+            
+            if (arg.ContainsKey("h") || arg.ContainsKey("help")) m.ShowUsage = true;
             
             if (arg.ContainsKey("d")) Int32.TryParse(arg["d"], out m.Debug);
             else if(arg.ContainsKey("debug")) Int32.TryParse(arg["debug"], out m.Debug);
             
             if (m.ShowUsage)
             {
-                Console.WriteLine("Usage: GridMeshUploadCmd.exe --login=LoginURL --first=FirstName --last=LastName --password=Password --file=PathToMesh [--upload-images] [--no-resize]");
+                Console.WriteLine();
+                Console.WriteLine("Usage: GridMeshUploadCmd.exe --login=LoginURL --first=FirstName --last=LastName --password=Password --file=PathToMesh               ");
+                Console.WriteLine("                             [--cc-first=CopyToFirstName] [--cc-last=CopyToLastName] [--upload-textures] [--allow-oversize]         ");
+                Console.WriteLine("                             [--texture-scale=ScaleFactor]                                                                          ");
+                Console.WriteLine("                                                                                                                                    ");
+                Console.WriteLine("This commandline client can connect to your grid and upload mesh assets. The mesh asset is described by a Collada (.dae) file and   ");
+                Console.WriteLine("any associated texture image files in the format .bmp, .tga, .png or .jpg. All the files must reside in the same source directory.  ");
+                Console.WriteLine("Being a commandline client (as opposed to a GUI client), it is easy to use in automation scripts to speed up the workflow of getting");
+                Console.WriteLine("your mesh assets into OpenSimulator. The client can also optionally copy the uploaded assets to another avatar and perform other    ");
+                Console.WriteLine("operations to speed up the workflow.                                                                                                ");
+                Console.WriteLine();
+                Console.WriteLine("--login               This is the login URI for your grid. e.g. OSGrid is http://login.osgrid.org:80                                ");
+                Console.WriteLine("--first               The first name of the avatar the client uses to login                                                         ");
+                Console.WriteLine("--last                The last name of the avatar the client uses to login                                                          ");
+                Console.WriteLine("--password            The password of the avatar logging in                                                                         ");
+                Console.WriteLine("--file                Either a full path to the .dae and texture files, or relative to the directory this program runs from         ");
+                Console.WriteLine("--cc-first            Copy the uploaded asset to the avatar with this first name                                                    ");
+                Console.WriteLine("--cc-last             Copy the uploaded asset to the avatar with this last name                                                     ");
+                Console.WriteLine("--upload-textures     Upload the textures this mesh asset references.                                                               ");
+                Console.WriteLine("--allow-oversize      Allow textures greater than 1024x1024px without resizing them to 1024x1024px.                                 ");
+                Console.WriteLine("--texture-scale       Set the texture horizontal and vertical scaling. Normally 1.0, but for terrain tiles 0.995 is best            ");
+                Console.WriteLine();
                 return 1;
             }
 
@@ -130,21 +125,6 @@ namespace cmdGridMeshUpload
 
             while (!m.EventQueueRunning) System.Threading.Thread.Sleep(500);
 
-            /*
-            UUID TexturesFolder = m.Client.Inventory.FindFolderForType(AssetType.Texture);
-            UUID MyUUID = m.Client.Self.AgentID;
-            UUID OurTexturesFolder = UUID.Zero;
-            Console.WriteLine("My UUID = {0} Texture Folder UUID = {1}", MyUUID, TexturesFolder);
-            List<InventoryBase> fl = m.Client.Inventory.FolderContents(TexturesFolder, MyUUID, true, false, InventorySortOrder.ByName, 5000);
-            if (fl != null)
-            {
-                foreach (InventoryBase f in fl)
-                {
-                    if(f.GetType().ToString() == "OpenMetaverse.InventoryFolder") Console.WriteLine("{0} {1} |{2}|", f.UUID.ToString(), f.GetType().ToString(), f.Name);
-                }
-            }
-            */
-            
             if (m.UploadMesh())
             {
                 while (!m.UploadComplete) System.Threading.Thread.Sleep(500);
@@ -155,7 +135,12 @@ namespace cmdGridMeshUpload
                 Console.WriteLine("Error Uploading Mesh");
             }
 
-            m.FixUploadFolders();
+            if (m.UploadComplete && !m.UploadFailed)
+            {
+                m.FixUploadFolders();
+                m.ccUUID = m.FindCCUser(m.ccFirstName, m.ccLastName);
+                if (m.ccUUID != UUID.Zero) m.SendCopyToUser(m.ccUUID);
+            }
             
             //initiate logout
             if (m.Connected)
@@ -254,8 +239,8 @@ namespace cmdGridMeshUpload
 
             var parser = new cmdColladaLoader();
             parser.Debug = Debug;
-            parser.Resize = !NoResize;
-            var prims = parser.Load(FileName, UploadImages);
+            parser.Resize = !AllowOversize;
+            var prims = parser.Load(FileName, UploadTextures);
             if (prims == null || prims.Count == 0)
             {
                 Console.WriteLine("Error: Failed to parse collada file");
@@ -274,12 +259,12 @@ namespace cmdGridMeshUpload
             //we'll fix this later after the upload is complete.
             UUID ObjectFolder = Client.Inventory.FindFolderForType(AssetType.Object);
             MyObjectFolder = Client.Inventory.CreateFolder(ObjectFolder, ObjectTmpName);
-            MyTexturesFolder = Client.Inventory.CreateFolder(MyObjectFolder, "Textures");
+            MyTexturesFolder = MyObjectFolder; // Client.Inventory.CreateFolder(MyObjectFolder, "Textures");
 
             if (Debug > 1)
             {
                 Console.WriteLine("Created New Folder under 'Objects' called '{0}' with UUID {1}", ObjectTmpName, MyObjectFolder);
-                Console.WriteLine("Created New Folder under '{0}' called 'Textures' with UUID {1}", ObjectTmpName, MyTexturesFolder);
+                //Console.WriteLine("Created New Folder under '{0}' called 'Textures' with UUID {1}", ObjectTmpName, MyTexturesFolder);
             }
             
             var uploader = new cmdModelUploader(Client, prims);
@@ -291,7 +276,8 @@ namespace cmdGridMeshUpload
             uploader.InvDescription = "Uploaded by GridUploadMeshCmd on " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             uploader.InvAssetFolderUUID = MyObjectFolder;
             uploader.InvTextureFolderUUID = MyTexturesFolder;
-            uploader.UploadTextures = UploadImages;
+            uploader.UploadTextures = UploadTextures;
+            uploader.TextureScale = TextureScale;
             uploader.Debug = Debug;
 
             uploader.Upload((res=>
@@ -315,7 +301,7 @@ namespace cmdGridMeshUpload
                 uploadDone.Set();
             }));
 
-            if (!uploadDone.WaitOne(4 * 60 * 1000))
+            if (!uploadDone.WaitOne(20 * 60 * 1000))
             {
                 Console.WriteLine("Message upload timeout");
                 UploadComplete = true;
@@ -328,13 +314,13 @@ namespace cmdGridMeshUpload
         {
             UUID MyUUID = Client.Self.AgentID;
 
-            if(UploadImages) 
+            if(UploadTextures) 
             {
                 List<InventoryBase> fl;
                 UUID OurTexturesFolder = UUID.Zero;
                 UUID TexturesFolder = Client.Inventory.FindFolderForType(AssetType.Texture);
                 
-                if(Debug > 1) Console.WriteLine("Scanning for uploaded texture folder '{0}' in system folder 'Textures' with UUID = {1}", ObjectTmpName, TexturesFolder);
+                if(Debug > 0) Console.WriteLine("Scanning for uploaded texture folder '{0}' in system folder 'Textures' with UUID = {1}", ObjectTmpName, TexturesFolder);
                 fl = Client.Inventory.FolderContents(TexturesFolder, MyUUID, true, false, InventorySortOrder.ByName, 20000);
                 if (fl != null)
                 {
@@ -352,7 +338,7 @@ namespace cmdGridMeshUpload
                 if (OurTexturesFolder != UUID.Zero)
                 {
                     //now get a list of the texture names in the "Textures" folder
-                    if (Debug > 1) Console.WriteLine("Scanning for uploaded textures in folder with UUID={0}...", OurTexturesFolder);
+                    if (Debug > 0) Console.WriteLine("Scanning for uploaded textures in folder with UUID={0}...", OurTexturesFolder);
                     fl = Client.Inventory.FolderContents(OurTexturesFolder, MyUUID, false, true, InventorySortOrder.ByName, 20000);
                     if (fl != null)
                     {
@@ -362,7 +348,7 @@ namespace cmdGridMeshUpload
                             {
                                 if (f.Name.Contains(ObjectTmpName + " - Texture"))
                                 {
-                                    if (Debug > 1) Console.WriteLine("Found texture '{0}' with UUID={1}, ParentUUID={2}", f.Name, f.UUID, f.ParentUUID);
+                                    if (Debug > 0) Console.WriteLine("Found texture '{0}' with UUID={1}, ParentUUID={2}", f.Name, f.UUID, f.ParentUUID);
                                     string[] tx = f.Name.Split(" ".ToCharArray());
                                     int i;
                                     if (Int32.TryParse(tx[tx.Length - 1], out i))
@@ -371,14 +357,14 @@ namespace cmdGridMeshUpload
                                         string ext = System.IO.Path.GetExtension(ImgName);
                                         ImgName = ImgName.Substring(0, ImgName.Length - ext.Length);
 
-                                        if (Debug > 1) Console.WriteLine("Renaming texture from '{0}' to '{1}' and moving from folder {2} to {3}", f.Name, ImgName, f.ParentUUID, MyTexturesFolder);
+                                        if (Debug > 0) Console.WriteLine("Renaming texture from '{0}' to '{1}' and moving from folder {2} to {3}", f.Name, ImgName, f.ParentUUID, MyTexturesFolder);
                                         var Texture = Client.Inventory.FetchItem(f.UUID, MyUUID, 20000);
                                         Texture.Name = ImgName;
                                         Texture.Description = "Uploaded with mesh '" + ObjectName + "' from file '" + ImageNames[i - 1] + "'";
-                                        if (Debug > 1) Console.WriteLine("Inventory Item Name: '{0}' AssetUUID:{1} InvUUID:{2} ParentUUID:{3}", Texture.Name, Texture.AssetUUID, Texture.UUID, Texture.ParentUUID);
+                                        if (Debug > 0) Console.WriteLine("Inventory Item Name: '{0}' AssetUUID:{1} InvUUID:{2} ParentUUID:{3}", Texture.Name, Texture.AssetUUID, Texture.UUID, Texture.ParentUUID);
                                         Client.Inventory.RequestUpdateItem(Texture);
                                         Client.Inventory.MoveItem(f.UUID, MyTexturesFolder);
-                                        if (Debug > 1) Console.WriteLine();
+                                        if (Debug > 0) Console.WriteLine();
                                     }
                                 }
                             }
@@ -386,20 +372,81 @@ namespace cmdGridMeshUpload
                         fl.Clear();
                     }
 
-                    if (Debug > 1) Console.WriteLine("Removing folder {0}", OurTexturesFolder);
+                    if (Debug > 0) Console.WriteLine("Removing folder {0}", OurTexturesFolder);
                     Client.Inventory.RemoveFolder(OurTexturesFolder); //remove the created "Textures" folder that Opensim made
                 }
             }
-            if (Debug > 1) Console.WriteLine("Renaming mesh inventory object {0} from {1} to {2}", UploadedMeshInvUUID, ObjectTmpName, ObjectName);
+            if (Debug > 0) Console.WriteLine("Renaming mesh inventory object {0} from {1} to {2}", UploadedMeshInvUUID, ObjectTmpName, ObjectName);
             //rename the mesh from ObjectTmpName to ObjectName
             var MyObject = Client.Inventory.FetchItem(UploadedMeshInvUUID, MyUUID, 20000);
             MyObject.Name = ObjectName;
-            if (Debug > 1) Console.WriteLine("Inventory Item '{0}' {1} {2} {3}", MyObject.Name, MyObject.AssetUUID, MyObject.UUID, MyObject.ParentUUID);
+            if (Debug > 0) Console.WriteLine("Inventory Item '{0}' {1} {2} {3}", MyObject.Name, MyObject.AssetUUID, MyObject.UUID, MyObject.ParentUUID);
             Client.Inventory.RequestUpdateItem(MyObject);
 
-            if (Debug > 1) Console.WriteLine("Renaming object folder from {0} to {1}", ObjectTmpName, ObjectName);
+            if (Debug > 0) Console.WriteLine("Renaming object folder from {0} to {1}", ObjectTmpName, ObjectName);
             Client.Inventory.MoveFolder(MyObjectFolder, Client.Inventory.FindFolderForType(AssetType.Object), ObjectName);
              
+        }
+
+        public UUID FindCCUser(string FirstName, string LastName)
+        {
+            UUID SendToID = UUID.Zero;
+            string sendTo = String.Empty;
+            
+            if (FirstName != String.Empty && LastName != String.Empty) sendTo = FirstName + " " + LastName;
+
+            if (sendTo.Length > 0)
+            {
+                AutoResetEvent lookupEvent = new AutoResetEvent(false);
+                UUID thisQueryID = UUID.Zero;
+                bool lookupSuccess = false;
+
+                EventHandler<DirPeopleReplyEventArgs> callback =
+                    delegate(object s, DirPeopleReplyEventArgs ep)
+                    {
+                        if (ep.QueryID == thisQueryID)
+                        {
+                            if (ep.MatchedPeople.Count > 0)
+                            {
+                                //lookups return people with any of the words above in so we must check the results again for exact match
+                                for (int i = 0; i < ep.MatchedPeople.Count; i++)
+                                {
+                                    if(ep.MatchedPeople[i].FirstName == FirstName && ep.MatchedPeople[i].LastName == LastName)
+                                    {
+                                        SendToID = ep.MatchedPeople[i].AgentID;
+                                        lookupSuccess = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            lookupEvent.Set();
+                        }
+                    };
+
+                Client.Directory.DirPeopleReply += callback;
+                thisQueryID = Client.Directory.StartPeopleSearch(sendTo, 0);
+
+                bool eventSuccess = lookupEvent.WaitOne(20 * 1000, false);
+                Client.Directory.DirPeopleReply -= callback;
+
+                if (eventSuccess && lookupSuccess)
+                {
+                    Console.WriteLine("A copy of the uploaded mesh folder will be sent to avatar {0} with UUID {1}", sendTo, SendToID.ToString());
+                }
+                else
+                {
+                    Console.WriteLine("Could not find avatar {0}. No copy will be generated.", sendTo);
+                }
+            }
+
+            return SendToID;
+        }
+
+        public void SendCopyToUser(UUID GiveTo)
+        {
+            Console.WriteLine("Giving object {0}, named {1} to user {2}", MyObjectFolder, ObjectName, GiveTo);
+            Client.Inventory.GiveFolder(MyObjectFolder, ObjectName, AssetType.Folder, GiveTo, true);
         }
     }
 }

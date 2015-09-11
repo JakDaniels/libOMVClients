@@ -35,6 +35,7 @@ namespace OpenMetaverse.ImportExport
         public int Debug;
         public UUID ReturnedMeshUUID;
         public UUID ReturnedMeshInvUUID;
+        public float TextureScale = 1.0f;
 
         /// <summary>
         /// Inlcude stub convex hull physics, required for uploading to Second Life
@@ -196,8 +197,8 @@ namespace OpenMetaverse.ImportExport
                             ImageNames.Add(face.Material.Texture);
                         }
                         faceMap["image"] = index;
-                        faceMap["scales"] = 1.0f;
-                        faceMap["scalet"] = 1.0f;
+                        faceMap["scales"] = TextureScale;
+                        faceMap["scalet"] = TextureScale;
                         faceMap["offsets"] = 0.0f;
                         faceMap["offsett"] = 0.0f;
                         faceMap["imagerot"] = 0.0f;
