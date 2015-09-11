@@ -603,7 +603,10 @@ namespace OpenMetaverse.ImportExport
                     );
                 prim.Positions[i] = pos;
             }
-
+            // if the cube has any side = 0, e.g. the object is just a plane, then you won't be able to select the object in the viewer properly
+            if (prim.Scale.X == 0) prim.Scale.X = 0.5f;
+            if (prim.Scale.Y == 0) prim.Scale.Y = 0.5f;
+            if (prim.Scale.Z == 0) prim.Scale.Z = 0.5f;
         }
 
         int[] StrToArray(string s)
