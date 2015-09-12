@@ -362,18 +362,17 @@ namespace OpenMetaverse.ImportExport
                         //dereference sampler and surface if necessary
                         if (samplerMap.ContainsKey(effect.Texture))
                         {
-                            effect.Texture = samplerMap[effect.Texture];
-                            if (!string.IsNullOrEmpty(effect.Texture))
+                            var sampler = samplerMap[effect.Texture];
+                            if (!string.IsNullOrEmpty(sampler))
                             {
+                                effect.Texture = sampler;
                                 if (surfaceMap.ContainsKey(effect.Texture))
                                 {
-                                    effect.Texture = surfaceMap[effect.Texture];
+                                    var surface = surfaceMap[effect.Texture];
+                                    if (!string.IsNullOrEmpty(surface)) effect.Texture = surface;
                                 }
                             }
                         }
-                    }
-                    if (!string.IsNullOrEmpty(effect.Texture))
-                    {
                         if (imgMap.ContainsKey(effect.Texture))
                         {
                             effect.Texture = imgMap[effect.Texture];
