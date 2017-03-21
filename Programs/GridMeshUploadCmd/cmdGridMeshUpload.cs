@@ -22,6 +22,7 @@ namespace cmdGridMeshUpload
         private GridClient Client;
         private string FileName = String.Empty;
         private string LoginURL = String.Empty;
+        private string LoginRegion = String.Empty;
         private string FirstName = String.Empty;
         private string LastName = String.Empty;
         private string Password = String.Empty;
@@ -29,6 +30,7 @@ namespace cmdGridMeshUpload
         private string ccLastName = String.Empty;
         private bool UploadTextures = true;
         private bool AllowOversize = false;
+        private bool PhysicsFromMesh = false;
         private float TextureScale = 1.0f;
         private int Debug = 0;
 
@@ -48,17 +50,20 @@ namespace cmdGridMeshUpload
         private UUID MyObjectFolder;
         private UUID MyTexturesFolder;
         private UUID ccUUID = UUID.Zero;
+        public string ClientVersion = "0.2";
 
         public static int Main(string[] args)
         {
             //args should be --login=LoginURL --first=FirstName --last=LastName ==password=Password --file=PathToMesh 
-            //               [--cc-first=CopyToFirstName] [--cc-last=CopyToLastName] [--upload-textures] [--allow-oversize] [--texture-scale=ScaleFactor]
+            //               [--cc-first=CopyToFirstName] [--cc-last=CopyToLastName] [--upload-textures] [--allow-oversize] [--texture-scale=ScaleFactor] [--physics-from-mesh]
 
             cmdGridMeshUpload m = new cmdGridMeshUpload();
 
             Dictionary<string, string> arg = m.ParseArgs(args);
 
             if (arg.ContainsKey("login")) m.LoginURL = arg["login"]; else m.ShowUsage = true;
+
+            if (arg.ContainsKey("login-region")) m.LoginRegion = arg["login-region"];
 
             if (arg.ContainsKey("first")) m.FirstName = arg["first"]; else m.ShowUsage = true;
 
@@ -75,6 +80,8 @@ namespace cmdGridMeshUpload
             if (arg.ContainsKey("upload-textures")) m.UploadTextures = true;
             
             if (arg.ContainsKey("allow-oversize")) m.AllowOversize = true;
+
+            if (arg.ContainsKey("physics-from-mesh")) m.PhysicsFromMesh = true;
             
             if (arg.ContainsKey("texture-scale"))  float.TryParse(arg["texture-scale"], out m.TextureScale);
             
@@ -85,10 +92,11 @@ namespace cmdGridMeshUpload
             
             if (m.ShowUsage)
             {
+                Console.WriteLine("GridMeshUploadCmd v" + m.ClientVersion);
                 Console.WriteLine();
                 Console.WriteLine("Usage: GridMeshUploadCmd.exe --login=LoginURL --first=FirstName --last=LastName --password=Password --file=PathToMesh               ");
                 Console.WriteLine("                             [--cc-first=CopyToFirstName] [--cc-last=CopyToLastName] [--upload-textures] [--allow-oversize]         ");
-                Console.WriteLine("                             [--texture-scale=ScaleFactor]                                                                          ");
+                Console.WriteLine("                             [--texture-scale=ScaleFactor] [--physics-from-mesh] [--login-region=RegionName]                                                                        ");
                 Console.WriteLine("                                                                                                                                    ");
                 Console.WriteLine("This commandline client can connect to your grid and upload mesh assets. The mesh asset is described by a Collada (.dae) file and   ");
                 Console.WriteLine("any associated texture image files in the format .bmp, .tga, .png or .jpg. All the files must reside in the same source directory.  ");
@@ -105,15 +113,18 @@ namespace cmdGridMeshUpload
                 Console.WriteLine("--cc-last             Copy the uploaded asset to the avatar with this last name                                                     ");
                 Console.WriteLine("--upload-textures     Upload the textures this mesh asset references.                                                               ");
                 Console.WriteLine("--allow-oversize      Allow textures greater than 1024x1024px without resizing them to 1024x1024px.                                 ");
-                Console.WriteLine("--texture-scale       Set the texture horizontal and vertical scaling. Normally 1.0, but for terrain tiles 0.995 is best            ");
+                Console.WriteLine("--texture-scale       Set the texture horizontal and vertical scaling. Normally 1.0, but for terrain tiles 0.995 is best.           ");
+                Console.WriteLine("--physics-from-mesh   Also send the mesh data as physics. Equivalent to 'from file' in the Physics tab of viewer's mesh upload page.");
+                Console.WriteLine("--login-region        This is the optional name of the Region on the grid that you want to login to, to perform the upload          ");
                 Console.WriteLine();
                 return 1;
             }
 
             m.InitClient();
             //initiate login
-            LoginParams lp = m.Client.Network.DefaultLoginParams(m.FirstName, m.LastName, m.Password, "GridMeshUploadCmd", "0.1");
+            LoginParams lp = m.Client.Network.DefaultLoginParams(m.FirstName, m.LastName, m.Password, "GridMeshUploadCmd", m.ClientVersion);
             lp.URI = m.LoginURL;
+            if(m.LoginRegion != "") lp.Start = "uri:" + m.LoginRegion + "&128&128&25";
             m.Client.Network.BeginLogin(lp);
 
             while (!m.Connected)
@@ -239,7 +250,8 @@ namespace cmdGridMeshUpload
 
             var parser = new cmdColladaLoader();
             parser.Debug = Debug;
-            parser.Resize = !AllowOversize;
+            parser.AllowOversizeTextures = AllowOversize;
+            parser.UsePhysicsFromMesh = PhysicsFromMesh;
             var prims = parser.Load(FileName, UploadTextures);
             if (prims == null || prims.Count == 0)
             {
@@ -249,17 +261,18 @@ namespace cmdGridMeshUpload
 
             Console.WriteLine("Parse collada file success, found {0} objects", prims.Count);
 
-            Console.WriteLine("Uploading...");
-
             ObjectName = Path.GetFileNameWithoutExtension(FileName);
             ObjectTmpName = "GMUC-" + UUID.Random().ToString();
 
             //use a folder name we can later find by searching, so we can move the textures into the same folder.
-            //OpenSim ignores the textures folder UUID we give it and places textures in its own folder under /Textures
-            //we'll fix this later after the upload is complete.
+            //OpenSim ignores the textures folder UUID we give it in the mesh upload and places textures in its own folder under /Textures/MeshName
+            //but we'll fix this after the upload is complete. That's why we give the folder a temp name we can find later.
             UUID ObjectFolder = Client.Inventory.FindFolderForType(AssetType.Object);
             MyObjectFolder = Client.Inventory.CreateFolder(ObjectFolder, ObjectTmpName);
-            MyTexturesFolder = MyObjectFolder; // Client.Inventory.CreateFolder(MyObjectFolder, "Textures");
+
+            // This would be nicer: a subfolder containing the textures, but that stops us giving the folder to someone else
+            // MyTexturesFolder = Client.Inventory.CreateFolder(MyObjectFolder, "Textures");
+            MyTexturesFolder = MyObjectFolder; 
 
             if (Debug > 1)
             {
@@ -271,7 +284,7 @@ namespace cmdGridMeshUpload
             var uploadDone = new AutoResetEvent(false);
 
             uploader.IncludePhysicsStub = true;
-            uploader.UseModelAsPhysics = false;
+            uploader.UseModelAsPhysics = PhysicsFromMesh;
             uploader.InvName = ObjectTmpName;
             uploader.InvDescription = "Uploaded by GridUploadMeshCmd on " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
             uploader.InvAssetFolderUUID = MyObjectFolder;

@@ -47,10 +47,11 @@ namespace OpenMetaverse.ImportExport
         COLLADA Model;
         static XmlSerializer Serializer = null;
         List<Node> Nodes;
-        List<ModelMaterial> Materials;
+        List<cmdModelMaterial> Materials;
         Dictionary<string, string> MatSymTarget;
         string FileName;
-        public bool Resize = false;
+        public bool AllowOversizeTextures = false;
+        public bool UsePhysicsFromMesh = false;
         public int Debug = 0;
 
         class Node
@@ -67,7 +68,7 @@ namespace OpenMetaverse.ImportExport
         /// <param name="filename">Load .dae model from this file</param>
         /// <param name="loadImages">Load and decode images for uploading with model</param>
         /// <returns>A list of mesh prims that were parsed from the collada file</returns>
-        public List<ModelPrim> Load(string filename, bool loadImages)
+        public List<cmdModelPrim> Load(string filename, bool loadImages)
         {
             try
             {
@@ -95,11 +96,11 @@ namespace OpenMetaverse.ImportExport
             catch (Exception ex)
             {
                 Console.WriteLine("Failed parsing collada file: {0}", ex.Message);
-                return new List<ModelPrim>();
+                return new List<cmdModelPrim>();
             }
         }
 
-        void LoadImages(List<ModelPrim> prims)
+        void LoadImages(List<cmdModelPrim> prims)
         {
             foreach (var prim in prims)
             {
@@ -114,7 +115,7 @@ namespace OpenMetaverse.ImportExport
             }
         }
 
-        void LoadImage(ModelMaterial material)
+        void LoadImage(cmdModelMaterial material)
         {
             var fname = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(FileName), material.Texture);
 
@@ -150,7 +151,7 @@ namespace OpenMetaverse.ImportExport
                     width = ClosestPowerOwTwo(width);
                     height = ClosestPowerOwTwo(height);
 
-                    if (Resize)
+                    if (AllowOversizeTextures)
                     {
                         width = width > 1024 ? 1024 : width;
                         height = height > 1024 ? 1024 : height;
@@ -199,9 +200,9 @@ namespace OpenMetaverse.ImportExport
             return res > 1 ? res / 2 : 1;
         }
 
-        ModelMaterial ExtractMaterial(object diffuse)
+        cmdModelMaterial ExtractMaterial(object diffuse)
         {
-            ModelMaterial ret = new ModelMaterial();
+            cmdModelMaterial ret = new cmdModelMaterial();
             if (diffuse is common_color_or_texture_typeColor)
             {
                 var col = (common_color_or_texture_typeColor)diffuse;
@@ -222,7 +223,7 @@ namespace OpenMetaverse.ImportExport
 
             if (Model == null) return;
 
-            Materials = new List<ModelMaterial>();
+            Materials = new List<cmdModelMaterial>();
 
             // Material -> effect mapping
             Dictionary<string, string> matEffect = new Dictionary<string, string>();
@@ -233,7 +234,7 @@ namespace OpenMetaverse.ImportExport
             // Sampler to Surface mapping
             Dictionary<string, string> surfaceMap = new Dictionary<string, string>();
 
-            List<ModelMaterial> tmpEffects = new List<ModelMaterial>();
+            List<cmdModelMaterial> tmpEffects = new List<cmdModelMaterial>();
 
             // Image ID -> filename mapping
             Dictionary<string, string> imgMap = new Dictionary<string, string>();
@@ -455,9 +456,9 @@ namespace OpenMetaverse.ImportExport
             }
         }
 
-        List<ModelPrim> Parse()
+        List<cmdModelPrim> Parse()
         {
-            var Prims = new List<ModelPrim>();
+            var Prims = new List<cmdModelPrim>();
 
             float DEG_TO_RAD = 0.017453292519943295769236907684886f;
 
@@ -513,8 +514,9 @@ namespace OpenMetaverse.ImportExport
                             byte[] mesh_asset = null;
                             foreach (var node in nodes)
                             {
-                                var prim = new ModelPrim();
+                                var prim = new cmdModelPrim();
                                 prim.ID = node.ID;
+                                prim.UsePhysicsFromMesh = UsePhysicsFromMesh;
                                 Prims.Add(prim);
                                 Matrix4 primTransform = transform;
                                 primTransform = primTransform * node.Transform;
@@ -561,7 +563,7 @@ namespace OpenMetaverse.ImportExport
             return null;
         }
 
-        void AddPositions(mesh mesh, ModelPrim prim, Matrix4 transform)
+        void AddPositions(mesh mesh, cmdModelPrim prim, Matrix4 transform)
         {
             prim.Positions = new List<Vector3>();
             source posSrc = FindSource(mesh.source, mesh.vertices.input[0].source);
@@ -602,7 +604,8 @@ namespace OpenMetaverse.ImportExport
                     );
                 prim.Positions[i] = pos;
             }
-            // if the cube has any side = 0, e.g. the object is just a plane, then you won't be able to select the object in the viewer properly
+            // if the cube has any side = 0, e.g. the object is just a plane, then you won't be able
+            // to select the object in the viewer properly, so set the cube's min dimensions
             if (prim.Scale.X == 0) prim.Scale.X = 0.5f;
             if (prim.Scale.Y == 0) prim.Scale.Y = 0.5f;
             if (prim.Scale.Z == 0) prim.Scale.Z = 0.5f;
@@ -621,7 +624,7 @@ namespace OpenMetaverse.ImportExport
             return ret;
         }
 
-        void AddFacesFromPolyList(polylist list, mesh mesh, ModelPrim prim, Matrix4 transform)
+        void AddFacesFromPolyList(polylist list, mesh mesh, cmdModelPrim prim, Matrix4 transform)
         {
             string material = list.material;
             source posSrc = null;
@@ -688,13 +691,13 @@ namespace OpenMetaverse.ImportExport
 
             }
 
-            ModelFace face = new ModelFace();
+            cmdModelFace face = new cmdModelFace();
             face.MaterialID = list.material;
             if (face.MaterialID != null)
             {
                 if (MatSymTarget.ContainsKey(list.material))
                 {
-                    ModelMaterial mat = Materials.Find(m => m.ID == MatSymTarget[list.material]);
+                    cmdModelMaterial mat = Materials.Find(m => m.ID == MatSymTarget[list.material]);
                     if (mat != null)
                     {
                         face.Material = mat;

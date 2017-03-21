@@ -24,7 +24,7 @@ namespace OpenMetaverse.ImportExport
     public class cmdModelUploader
     {
         public GridClient Client;
-        public List<ModelPrim> Prims;
+        public List<cmdModelPrim> Prims;
         public List<byte[]> Images;
         public List<string> ImageNames;
         public Dictionary<string, int> ImgIndex;
@@ -58,7 +58,7 @@ namespace OpenMetaverse.ImportExport
         /// </summary>
         /// <param name="client">GridClient instance to communicate with the simulator</param>
         /// <param name="prims">List of ModelPrimitive objects to upload as a linkset</param>
-        public cmdModelUploader(GridClient client, List<ModelPrim> prims)
+        public cmdModelUploader(GridClient client, List<cmdModelPrim> prims)
         {
             this.Client = client;
             this.Prims = prims;
@@ -107,6 +107,7 @@ namespace OpenMetaverse.ImportExport
         /// <param name="callback">Callback that will be invoke upon completion of the upload. Null is sent on request failure</param>
         public void PrepareUpload(ModelUploadCallback callback)
         {
+            Console.WriteLine("Preparing Upload...");
             Uri url = null;
             if (Client.Network.CurrentSim == null ||
                 Client.Network.CurrentSim.Caps == null ||
@@ -125,7 +126,7 @@ namespace OpenMetaverse.ImportExport
             req["name"] = InvName;
             req["description"] = InvDescription;
 
-            req["asset_resources"] = AssetResources(UploadTextures);
+            req["asset_resources"] = AssetResources(UploadTextures, UseModelAsPhysics);
             req["asset_type"] = "mesh";
             req["inventory_type"] = "object";
 
@@ -137,6 +138,12 @@ namespace OpenMetaverse.ImportExport
             req["next_owner_mask"] = (int)PermissionMask.All;
 
             CapsClient request = new CapsClient(url);
+
+            request.OnDownloadProgress += (client, result, error) =>
+            {
+                Console.WriteLine("{0} {1}", result, error);
+            };
+
             request.OnComplete += (client, result, error) =>
             {
                 if (error != null || result == null || result.Type != OSDType.Map)
@@ -154,16 +161,18 @@ namespace OpenMetaverse.ImportExport
                     return;
                 }
 
+                Console.WriteLine("Done.");
                 if (Debug > 2) Console.WriteLine("Response from mesh upload prepare:\n{0}", OSDParser.SerializeLLSDNotationFormatted(result));
                 if (callback != null) callback(result);
             };
 
-            if (Debug > 2) Console.WriteLine("Sending Request Resources: {0}", OSDParser.SerializeLLSDNotationFormatted(req));
-            request.BeginGetResponse(req, OSDFormat.Xml, 3 * 60 * 1000);
+            Console.WriteLine("Sending Request Resources ({0} bytes) to server...", OSDParser.SerializeLLSDXmlBytes(req).LongLength);
+            if (Debug > 2) Console.WriteLine("{0}", OSDParser.SerializeLLSDNotationFormatted(req));
+            request.BeginGetResponse(req, OSDFormat.Xml, 1200 * 1000);
 
         }
 
-        OSD AssetResources(bool upload)
+        OSD AssetResources(bool upload, bool physicsFromMesh)
         {
             OSDArray instanceList = new OSDArray();
             List<byte[]> meshes = new List<byte[]>();
@@ -213,8 +222,12 @@ namespace OpenMetaverse.ImportExport
                 primMap["rotation"] = prim.Rotation;
                 primMap["scale"] = prim.Scale;
 
+                //I don't think Opensim honours these selections at present.... :(
                 primMap["material"] = (int)Material.Wood; // always sent as "wood" material
-                primMap["physics_shape_type"] = (int)PhysicsShapeType.ConvexHull; // always sent as "convex hull";
+                
+                if (physicsFromMesh) primMap["physics_shape_type"] = (int)PhysicsShapeType.Prim;
+                else primMap["physics_shape_type"] = (int)PhysicsShapeType.ConvexHull;
+                
                 primMap["mesh"] = meshes.Count;
                 meshes.Add(prim.Asset);
 
@@ -258,6 +271,11 @@ namespace OpenMetaverse.ImportExport
         public void PerformUpload(Uri uploader, ModelUploadCallback callback)
         {
             CapsClient request = new CapsClient(uploader);
+            request.OnDownloadProgress += (client, result, error) =>
+            {
+                Console.WriteLine("{0} {1}", result, error);
+            };
+
             request.OnComplete += (client, result, error) =>
             {
                 if (error != null || result == null || result.Type != OSDType.Map)
@@ -267,13 +285,15 @@ namespace OpenMetaverse.ImportExport
                     return;
                 }
                 OSDMap res = (OSDMap)result;
+                Console.WriteLine("Done.");
                 if (Debug > 2) Console.WriteLine("Response from mesh upload perform:\n{0}", OSDParser.SerializeLLSDNotationFormatted(result));
                 if (callback != null) callback(res);
             };
 
-            OSD resources = AssetResources(UploadTextures);
-            if (Debug > 2) Console.WriteLine("Sending Request Resources: {0}", OSDParser.SerializeLLSDNotationFormatted(resources));
-            request.BeginGetResponse(resources, OSDFormat.Xml, 60 * 1000);
+            OSD resources = AssetResources(UploadTextures, UseModelAsPhysics);
+            Console.WriteLine("Sending Request Resources ({0} bytes) to server...", OSDParser.SerializeLLSDXmlBytes(resources).LongLength);
+            if (Debug > 2) Console.WriteLine("{0}", OSDParser.SerializeLLSDNotationFormatted(resources));
+            request.BeginGetResponse(resources, OSDFormat.Xml, 1200 * 1000);
         }
     }
 }
