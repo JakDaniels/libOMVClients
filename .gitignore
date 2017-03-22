@@ -8,5 +8,4 @@ compile.bat
 *.mds
 
 [Oo]bj/
-[Bb]in/
-
+[Bbin]/openmetaverse_data

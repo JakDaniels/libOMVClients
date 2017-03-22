@@ -138,12 +138,6 @@ namespace OpenMetaverse.ImportExport
             req["next_owner_mask"] = (int)PermissionMask.All;
 
             CapsClient request = new CapsClient(url);
-
-            request.OnDownloadProgress += (client, result, error) =>
-            {
-                Console.WriteLine("{0} {1}", result, error);
-            };
-
             request.OnComplete += (client, result, error) =>
             {
                 if (error != null || result == null || result.Type != OSDType.Map)
@@ -271,11 +265,6 @@ namespace OpenMetaverse.ImportExport
         public void PerformUpload(Uri uploader, ModelUploadCallback callback)
         {
             CapsClient request = new CapsClient(uploader);
-            request.OnDownloadProgress += (client, result, error) =>
-            {
-                Console.WriteLine("{0} {1}", result, error);
-            };
-
             request.OnComplete += (client, result, error) =>
             {
                 if (error != null || result == null || result.Type != OSDType.Map)
