@@ -89,7 +89,8 @@ namespace OpenMetaverse.ImportExport
                 if (loadImages)
                 {
                     if (Debug > 0) Console.WriteLine("Looking for texture references in Collada data");
-                    LoadImages(prims);
+                    //LoadImages(prims);
+                    LoadImages();
                 }
                 return prims;
             }
@@ -100,6 +101,17 @@ namespace OpenMetaverse.ImportExport
             }
         }
 
+        void LoadImages()
+        {
+            foreach (var material in Materials)
+            {
+                if (!string.IsNullOrEmpty(material.Texture))
+                {
+                    LoadImage(material);
+                }
+            }
+        }
+        
         void LoadImages(List<cmdModelPrim> prims)
         {
             foreach (var prim in prims)
