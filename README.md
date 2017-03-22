@@ -48,10 +48,12 @@ Binary are prebuilt in the bin directory, or you can compile the project yoursel
 
 # With Visual Studio:
 
-Run one of the following batch files to create the VS project:
-runprebuild2010.bat for VS2010
-runprebuild2012.bat for VS2012
-runprebuild2013.bat for VS2013
+Run one of the following batch files to create the VS project:  
+  
+runprebuild2010.bat for VS2010  
+runprebuild2012.bat for VS2012  
+runprebuild2013.bat for VS2013  
+  
 Then open the libOMVClient.sln solution file and compile in the IDE.
 
 # Mono/Linux:
