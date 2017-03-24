@@ -150,7 +150,8 @@ namespace OpenMetaverse.ImportExport
 
                 if (res["state"] != "upload")
                 {
-                    Console.WriteLine("Mesh upload failure: {0}", res["message"]);
+                    OSDMap err = (OSDMap)res["error"];
+                    Console.WriteLine("Mesh upload failure: {0}", err["message"]);
                     if (callback != null) callback(null);
                     return;
                 }
